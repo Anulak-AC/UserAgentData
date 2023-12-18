@@ -37,6 +37,7 @@ Public Class XHeikinAshiCalculator
         End Using
     End Function
 
+
     Public Function ConvertToHeikinAshi(opens As JArray, closes As JArray, highs As JArray, lows As JArray, timestamps As JArray) As List(Of HeikinAshiData)
         Dim heikinAshiData As New List(Of HeikinAshiData)
         If opens IsNot Nothing Then
@@ -372,7 +373,7 @@ Public Class XHeikinAshiCalculator
         Return sum / Math.Min(period, currentIndex + 1)
     End Function
 
-    Private Function CalculateMACD(heikinAshiData As List(Of HeikinAshiData), currentIndex As Integer, shortPeriod As Integer, longPeriod As Integer, signalPeriod As Integer) As Double
+    Public Function CalculateMACD(heikinAshiData As List(Of HeikinAshiData), currentIndex As Integer, shortPeriod As Integer, longPeriod As Integer, signalPeriod As Integer) As Double
         ' Calculate MACD (Moving Average Convergence Divergence)
         Dim shortTermEMA As Double = CalculateExponentialMovingAverage(heikinAshiData, currentIndex, shortPeriod)
         Dim longTermEMA As Double = CalculateExponentialMovingAverage(heikinAshiData, currentIndex, longPeriod)
@@ -413,9 +414,8 @@ Public Class XHeikinAshiCalculator
             Return rsi
         End If
     End Function
-
     Private Function CalculateExponentialMovingAverage(heikinAshiData As List(Of HeikinAshiData), currentIndex As Integer, period As Integer, Optional previousEMA As Double = 0) As Double
-        ' Calculate Exponential Moving Average (EMA)
+        ' Calculate Exponential Moving Average (EMA) for the specified period
         Dim smoothingFactor As Double = 2 / (period + 1)
         Dim closePrice As Double = heikinAshiData(currentIndex).Close
 
@@ -423,6 +423,124 @@ Public Class XHeikinAshiCalculator
             Return closePrice ' Initial EMA is the closing price
         Else
             Return (closePrice - previousEMA) * smoothingFactor + previousEMA
+        End If
+    End Function
+
+    Public Function CreateDataTableWithEMAAndProbabilities(heikinAshiData As List(Of HeikinAshiData), signalData As List(Of SignalData)) As DataTable
+        Dim dataTable As New DataTable()
+
+        ' Add columns to the DataTable
+        dataTable.Columns.Add("Timestamp", GetType(DateTime))
+        dataTable.Columns.Add("HA_Open", GetType(Double))
+        dataTable.Columns.Add("HA_Close", GetType(Double))
+        dataTable.Columns.Add("EMA_5", GetType(Double))
+        dataTable.Columns.Add("EMA_10", GetType(Double))
+        dataTable.Columns.Add("EMA_20", GetType(Double))
+        dataTable.Columns.Add("Action", GetType(String))
+        dataTable.Columns.Add("CrossOverEMA5", GetType(String))
+        dataTable.Columns.Add("CrossOverEMA10", GetType(String))
+        dataTable.Columns.Add("CrossOverEMA20", GetType(String))
+        dataTable.Columns.Add("Probability_Up_After_CrossOverEMA5", GetType(Double))
+        dataTable.Columns.Add("Probability_Down_After_CrossOverEMA5", GetType(Double))
+        dataTable.Columns.Add("Probability_Up_After_CrossOverEMA10", GetType(Double))
+        dataTable.Columns.Add("Probability_Down_After_CrossOverEMA10", GetType(Double))
+        dataTable.Columns.Add("Probability_Up_After_CrossOverEMA20", GetType(Double))
+        dataTable.Columns.Add("Probability_Down_After_CrossOverEMA20", GetType(Double))
+
+        ' Calculate EMA values for Heikin-Ashi Close prices
+        Dim ema5 As Double = 0
+        Dim ema10 As Double = 0
+        Dim ema20 As Double = 0
+
+        Dim countCrossOverEMA5 As Integer = 0
+        Dim countCrossOverEMA10 As Integer = 0
+        Dim countCrossOverEMA20 As Integer = 0
+
+        Dim countUpAfterCrossOverEMA5 As Integer = 0
+        Dim countDownAfterCrossOverEMA5 As Integer = 0
+        Dim countUpAfterCrossOverEMA10 As Integer = 0
+        Dim countDownAfterCrossOverEMA10 As Integer = 0
+        Dim countUpAfterCrossOverEMA20 As Integer = 0
+        Dim countDownAfterCrossOverEMA20 As Integer = 0
+
+        For i As Integer = 0 To heikinAshiData.Count - 1
+            ' Calculate EMA values
+            ema5 = CalculateExponentialMovingAverage(heikinAshiData, i, 5, ema5)
+            ema10 = CalculateExponentialMovingAverage(heikinAshiData, i, 10, ema10)
+            ema20 = CalculateExponentialMovingAverage(heikinAshiData, i, 20, ema20)
+
+            Dim row As DataRow = dataTable.NewRow()
+            row("Timestamp") = heikinAshiData(i).Timestamp
+            row("HA_Open") = heikinAshiData(i).Open
+            row("HA_Close") = heikinAshiData(i).Close
+            row("EMA_5") = ema5
+            row("EMA_10") = ema10
+            row("EMA_20") = ema20
+            row("Action") = GetActionLabel(signalData, heikinAshiData(i).Timestamp)
+
+            ' Check for crossovers
+            row("CrossOverEMA5") = If(i > 0 AndAlso heikinAshiData(i - 1).Close < ema5 AndAlso heikinAshiData(i).Close >= ema5, "Up", If(i > 0 AndAlso heikinAshiData(i - 1).Close > ema5 AndAlso heikinAshiData(i).Close <= ema5, "Down", ""))
+            row("CrossOverEMA10") = If(i > 0 AndAlso heikinAshiData(i - 1).Close < ema10 AndAlso heikinAshiData(i).Close >= ema10, "Up", If(i > 0 AndAlso heikinAshiData(i - 1).Close > ema10 AndAlso heikinAshiData(i).Close <= ema10, "Down", ""))
+            row("CrossOverEMA20") = If(i > 0 AndAlso heikinAshiData(i - 1).Close < ema20 AndAlso heikinAshiData(i).Close >= ema20, "Up", If(i > 0 AndAlso heikinAshiData(i - 1).Close > ema20 AndAlso heikinAshiData(i).Close <= ema20, "Down", ""))
+
+            ' Count crossovers
+            If row("CrossOverEMA5").ToString() = "Up" Then
+                countCrossOverEMA5 += 1
+            ElseIf row("CrossOverEMA5").ToString() = "Down" Then
+                countCrossOverEMA5 += 1
+            End If
+
+            If row("CrossOverEMA10").ToString() = "Up" Then
+                countCrossOverEMA10 += 1
+            ElseIf row("CrossOverEMA10").ToString() = "Down" Then
+                countCrossOverEMA10 += 1
+            End If
+
+            If row("CrossOverEMA20").ToString() = "Up" Then
+                countCrossOverEMA20 += 1
+            ElseIf row("CrossOverEMA20").ToString() = "Down" Then
+                countCrossOverEMA20 += 1
+            End If
+
+            ' Count probabilities
+            If i > 0 Then
+                If row("Action").ToString() = "Up" Then
+                    If row("CrossOverEMA5").ToString() = "Up" Then
+                        countUpAfterCrossOverEMA5 += 1
+                    ElseIf row("CrossOverEMA10").ToString() = "Up" Then
+                        countUpAfterCrossOverEMA10 += 1
+                    ElseIf row("CrossOverEMA20").ToString() = "Up" Then
+                        countUpAfterCrossOverEMA20 += 1
+                    End If
+                ElseIf row("Action").ToString() = "Down" Then
+                    If row("CrossOverEMA5").ToString() = "Down" Then
+                        countDownAfterCrossOverEMA5 += 1
+                    ElseIf row("CrossOverEMA10").ToString() = "Down" Then
+                        countDownAfterCrossOverEMA10 += 1
+                    ElseIf row("CrossOverEMA20").ToString() = "Down" Then
+                        countDownAfterCrossOverEMA20 += 1
+                    End If
+                End If
+            End If
+
+            row("Probability_Up_After_CrossOverEMA5") = CalculateProbability(countUpAfterCrossOverEMA5, countCrossOverEMA5)
+            row("Probability_Down_After_CrossOverEMA5") = CalculateProbability(countDownAfterCrossOverEMA5, countCrossOverEMA5)
+            row("Probability_Up_After_CrossOverEMA10") = CalculateProbability(countUpAfterCrossOverEMA10, countCrossOverEMA10)
+            row("Probability_Down_After_CrossOverEMA10") = CalculateProbability(countDownAfterCrossOverEMA10, countCrossOverEMA10)
+            row("Probability_Up_After_CrossOverEMA20") = CalculateProbability(countUpAfterCrossOverEMA20, countCrossOverEMA20)
+            row("Probability_Down_After_CrossOverEMA20") = CalculateProbability(countDownAfterCrossOverEMA20, countCrossOverEMA20)
+
+            dataTable.Rows.Add(row)
+        Next
+
+        Return dataTable
+    End Function
+
+    Private Function CalculateProbability(countEvent As Integer, countTotal As Integer) As Double
+        If countTotal > 0 Then
+            Return CDbl(countEvent) / CDbl(countTotal)
+        Else
+            Return 0
         End If
     End Function
 

@@ -20,6 +20,9 @@ Public Class Form1
         End If
         ComboBox2.SelectedText = "15"
 
+
+
+
     End Sub
     Public Function ConvertTM(DateTimePicke As String) As Long
         ' Get the selected date and time from DateTimePicker1
@@ -67,12 +70,17 @@ Public Class Form1
 
         ' Create DataTable
         dt = hk.CreateDataTable(heikinAshiData, signalData)
-        DataGridView1.DataSource = dt
+        'DataGridView1.DataSource = dt
 
         'Dim signalData As List(Of SignalData) = AddBuySellSignals(heikinAshiData)
         SummarizeTrendProbabilities(heikinAshiData, signalData)
         hk.LearnAndTrade(heikinAshiData, signalData)
 
+
+        ' Create DataTable with Heikin-Ashi data and EMA values
+        Dim dataTable As DataTable = hk.CreateDataTableWithEMAAndProbabilities(heikinAshiData, signalData)
+        DataGridView1.DataSource = dataTable
+        ' 
         ' Create an instance of the XHeikinAshiCalculator
 
 
@@ -149,9 +157,9 @@ Public Class Form1
                         Dim macdValues() As Double = CalculateMACD(closes, 10, 50)
 
                         ' Calculate SMA
-                        Dim sma10 As Double = CalculateSMA(closes, 10)
-                        Dim sma50 As Double = CalculateSMA(closes, 50)
-                        Dim sma200 As Double = CalculateSMA(closes, 200)
+                        Dim sma10 As Double = CalculateSMA(closes, 5)
+                        Dim sma50 As Double = CalculateSMA(closes, 10)
+                        Dim sma200 As Double = CalculateSMA(closes, 20)
 
                         ' Compare current close with SMAs to determine trend
                         Dim currentClose As Double = closes(closes.Count - 1)
